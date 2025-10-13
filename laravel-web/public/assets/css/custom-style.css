@@ -1,0 +1,19 @@
+.navbar-logo{
+    height: 1000px;
+}
+
+body {
+    background-color: #b3c6da;
+    color: #333;
+}
+
+@font-face {
+    font-family: 'Lobster-Regular';
+    src: url('../fonts/Lobster-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+.font-custom{
+    font-family: 'Lobster-Regular';
+}
