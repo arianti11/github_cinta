@@ -27,7 +27,6 @@ Route::get('/', function () {
     ]);
 });
 
-//rais ganteng cuk
 Route::get('/pcr', function () {
     return 'Selamat Datang di website Kampus PCR!';
 });
