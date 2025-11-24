@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 class CreatePelangganDummy extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Run the database seeds.jytktkry
      */
     public function run(): void
     {
