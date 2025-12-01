@@ -1,8 +1,9 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -11,7 +12,7 @@ class AuthController extends Controller
      */
     public function index()
     {
-        return view('login-form');
+        return view('auth.login');
     }
 
     /**
@@ -27,41 +28,33 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-         $request->validate([
-        'username' => 'required',
-        'password' => 'required'
-    ], [
-        'username.required' => 'Username wajib diisi.',
-        'password.required' => 'Password wajib diisi.'
-    ]);
-
-    $username = $request->username;
-    $password = $request->password;
-
-    if (strlen($password) < 3) {
-        return back()->with('error', 'Password harus minimal 3 karakter.')->withInput();
-    }
-
-    if (!preg_match('/[A-Z]/', $password)) {
-        return back()->with('error', 'Password harus mengandung minimal satu huruf kapital.')->withInput();
-    }
-
-    if ($username === 'Cinta Dwi' && $password === 'Cinta123') {
-
-        // Simpan data ke session
-        session([
-            'username' => $username,
-            'last_login' => now()->format('d M Y H:i:s')
+        $input = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
         ]);
 
-        // Redirect ke halaman home.blade.php
-        return redirect('/')->with('success', 'Login berhasil! Selamat datang, ' . $username);
-    } else {
-        // Jika login gagal
-        return back()->with('error', 'Username atau password salah.')->withInput();
-    }
+        if (auth()->attempt($input)) {
+            $request->session()->regenerate();
+
+            if (auth()->user()->hasRole('admin')) {
+                return redirect()->intended('/admin/dashboard');
+            }
+            return redirect()->intended('/dashboard');
+        }
+        return back()->withErrors([
+            'email' => 'Email atau password salah.',
+        ]);
     }
 
+    public function logout(Request $request)
+    {
+        auth()->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/');
+    }
     /**
      * Display the specified resource.
      */

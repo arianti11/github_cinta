@@ -1,9 +1,11 @@
 <?php
-
 namespace App\Http\Controllers;
+
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use illuminate\Support\Facades\Storage;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -12,7 +14,7 @@ class UserController extends Controller
      */
     public function index()
     {
-        $data['user'] = user::all();
+        $data['dataUser'] = user::all();
         return view('admin.user.index', $data);
     }
 
@@ -22,7 +24,8 @@ class UserController extends Controller
     public function create()
     {
         //$data['password'] = Hash::make($request->password);
-        return view('admin.user.create');
+        $data['roles'] = Role::all();
+        return view('admin.user.create', $data);
     }
 
     /**
@@ -35,25 +38,24 @@ class UserController extends Controller
         // User::create($data);
         // return redirect()->route('user.index')->with('success', 'User berhasil ditambahkan!');
         $validatedData = $request->validate([
-        'name' => 'required|string|max:100',
-        // unique:users,email artinya email harus unik di tabel 'users' pada kolom 'email'
-        'email' => 'required|email|unique:users,email',
-        // confirmed memerlukan input dengan name="password_confirmation"
-        'password' => 'required|min:8|confirmed',
-    ]);
+            'name'     => 'required|string|max:100',
+            'email'    => 'required|email|max:255|unique:users',
+            'password' => 'required|min:7|string',
+            'role'     => 'required',
+            'avatar'   => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+        $validatedData['password'] = Hash::make($validatedData['password']);
 
-    // Data yang akan disimpan
-    $data = [
-        'name' => $validatedData['name'],
-        'email' => $validatedData['email'],
-        // Enkripsi password
-        'password' => Hash::make($validatedData['password']),
-    ];
+        if ($request->hasFile('avatar')) {
+            // Simpan ke folder 'public/avatars'
+            $validatedData['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        }
 
-    User::create($data);
-
-    // Redirect dengan flash message 'success'
-    return redirect()->route('user.index')->with('success', 'User berhasil ditambahkan dan divalidasi!');
+        $user = User::create($validatedData);
+        $user->assignRole($request->role);
+        return redirect()
+            ->route('admin.user.index')
+            ->with('success', 'Penambahan Data Berhasil!');
     }
 
     /**
@@ -69,7 +71,8 @@ class UserController extends Controller
      */
     public function edit(string $id)
     {
-        $user = User::findOrFail($id);
+        $data['dataUser'] = User::findOrFail($id);
+        $data['roles']    = Role::all();
         return view('admin.user.edit', compact('user'));
 
     }
@@ -79,47 +82,50 @@ class UserController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        // $user = User::findOrFail($id);
-        // $data = $request->only(['name', 'email']);
-        // if ($request->filled('password')) {
-        //     $data['password'] = Hash::make($request->password);
-        // }
-        // $user->update($data);
-        // return redirect()->route('user.index')->with('success', 'User berhasil diperbarui!');
         $user = User::findOrFail($id);
 
-    // Terapkan Validasi
-    $validatedData = $request->validate([
-        'name' => 'required|string|max:100',
-        // 'unique:users,email,'.$user->id artinya abaikan ID user ini saat mengecek keunikan email
-        'email' => 'required|email|unique:users,email,' . $user->id,
-        // password tidak required, tapi jika diisi, ia harus min:8 dan confirmed
-        'password' => 'nullable|min:8|confirmed',
-    ]);
+        $validatedData = $request->validate([
+            'name'     => ['required', 'string', 'max:255'],
+            'email'    => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'password' => ['nullable', 'string', 'min:7'],                         // Password baru
+            'role'     => ['required', 'string'],                                  // Role wajib diisi
+            'avatar'   => ['nullable', 'image', 'mimes:jpeg,jpg,png', 'max:2048'], // Avatar baru, maksimal 2MB
+        ]);
 
-    $data = [
-        'name' => $validatedData['name'],
-        'email' => $validatedData['email'],
-    ];
+        if (filled($validatedData['password'])) {
+            $validatedData['password'] = Hash::make($validatedData['password']);
+        } else {
+            unset($validatedData['password']);
+        }
 
-    // Cek apakah password diisi/diubah
-    if ($request->filled('password')) {
-        $data['password'] = Hash::make($validatedData['password']);
+        if ($request->hasFile('avatar')) {
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $validatedData['avatar'] = $request->file('avatar')->store('avatars', 'public');
+        } else {
+            unset($validatedData['avatar']);
+        }
+
+        $user->update($validatedData);
+        $user->syncRoles($request->role);
+
+        return redirect()->route('admin.user.index')->with('success', 'Perubahan Data Berhasil!');
     }
 
-    $user->update($data);
-
-    // Redirect dengan flash message 'success'
-    return redirect()->route('user.index')->with('success', 'User berhasil diperbarui dan divalidasi!');
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
+/**
+ * Remove the specified resource from storage.
+ */
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
-        $user->delete();
-        return redirect()->route('user.index')->with('success', 'User berhasil dihapus!');
+
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+
+            $user->delete();
+
+            return redirect()->route('admin.user.index')->with('success', 'Pengguna berhasil dihapus!');
+        }
     }
 }
